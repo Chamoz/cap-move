@@ -1,5 +1,6 @@
 // Review page: val-video mode (GT vs out-of-fold prediction) and upload mode (open-world, experimental).
 const S = { mode: "val", data: null, segs: [], sel: null, classes: [], reviews: {}, ref: null, poll: null,
+  deferred: new Set(), prevF: -1, rv: null,
   cam: { stream: null, rec: null, chunks: [], timer: null, maxSeconds: 90 } };
 const $ = (id) => document.getElementById(id);
 const video = $("video"), canvas = $("overlay"), ctx = canvas.getContext("2d");
@@ -32,7 +33,8 @@ const video = $("video"), canvas = $("overlay"), ctx = canvas.getContext("2d");
   video.addEventListener("loadedmetadata", layout);
   video.addEventListener("play", () => { $("play").textContent = "⏸ Pause"; tick(); });
   video.addEventListener("pause", () => { $("play").textContent = "▶ Play"; });
-  video.addEventListener("seeked", draw);
+  video.addEventListener("seeked", () => { S.prevF = curFrame(); draw(); });
+  initReviewModal();
   window.addEventListener("resize", () => { layout(); renderTimeline(); });
   document.addEventListener("keydown", onKey);
   S.videos = await api("api/val/videos");
@@ -266,6 +268,7 @@ function showJob(jobId, j) {
 }
 
 function loadMedia(url) {
+  closeReview(false); S.deferred.clear(); S.prevF = -1;
   video.pause(); video.src = url; video.playbackRate = Number($("speed").value); video.load();
   renderTimeline();
 }
@@ -329,6 +332,19 @@ function draw() {
     ph.style.left = (lane.clientWidth * f / Math.max(1, S.data.n_frames - 1)) + "px";
   }
   if ($("loopseg").checked && S.sel && !video.paused && f > S.sel.end_frame) seekFrame(S.sel.start_frame);
+  else if (!video.paused) autoPause(f);
+}
+
+// ------------------------------------------------------------------ pause-on-review
+const needsReview = (s) => !!(s.pred && s.pred.abstain && !S.reviews[s.id] && !S.deferred.has(s.id));
+
+// Pause only when normal playback crosses a flagged segment's start (prev < start <= f); seeks and
+// jumps larger than ~0.5 s never trigger, so scrubbing past a segment doesn't pop the drawer.
+function autoPause(f) {
+  const prev = S.prevF; S.prevF = f;
+  if (!$("pausereview").checked || $("rvmodal").open || f <= prev || f - prev > Math.max(2, Math.round(S.data.fps / 2))) return;
+  const s = S.segs.find((x) => prev < x.start_frame && x.start_frame <= f && needsReview(x));
+  if (s) { video.pause(); openReview(s, true); }
 }
 
 function tick() { draw(); if (!video.paused) requestAnimationFrame(tick); }
@@ -424,24 +440,91 @@ function renderDetail() {
   const rv = S.reviews[s.id];
   const sel = el("select", { id: "corr", "aria-label": "Corrected class" }, ...S.classes.map((c) => el("option", { value: c, selected: c === (s.gt_class || p.second_class) || null }, c)));
   const note = el("input", { id: "note", type: "text", maxlength: "500", placeholder: "note (optional)", "aria-label": "Review note" });
-  const send = async (action) => {
-    const body = { source: S.data.kind, ref: S.ref, segment_id: s.id, action, note: note.value || null,
-      corrected_class: action === "correct" ? sel.value : null };
-    try {
-      const r = await api("api/reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      S.reviews[s.id] = r; renderTimeline(); renderDetail();
-    } catch (e) { box.append(el("div", { class: "notice error" }, e.message)); }
-  };
+  const send = (action) => postReview(s, action, action === "correct" ? sel.value : null, note.value)
+    .catch((e) => box.append(el("div", { class: "notice error" }, e.message)));
   box.append(el("h3", {}, "Review"),
     rv ? el("p", { class: "small" }, `Last: ${rv.action}${rv.corrected_class ? " → " + rv.corrected_class : ""} at ${rv.utc}`) : null,
     el("div", { class: "controls" },
       el("button", { onclick: () => send("confirm"), title: "Prediction is right (c)" }, "✓ Confirm"),
       el("button", { onclick: () => send("reject"), title: "No such activity / bad segment (r)" }, "✗ Reject")),
-    el("div", { class: "controls" }, sel, el("button", { onclick: () => send("correct") }, "Correct to…")), note);
+    el("div", { class: "controls" }, sel, el("button", { onclick: () => send("correct") }, "Correct to…")), note,
+    el("div", { class: "controls" }, el("button", { class: "primary", onclick: () => { video.pause(); openReview(s, false); } }, "Open review panel")));
   S.sendReview = send;
 }
 
+async function postReview(s, action, correctedClass, note) {
+  const body = { source: S.data.kind, ref: S.ref, segment_id: s.id, action, note: note || null, corrected_class: correctedClass };
+  const r = await api("api/reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  S.reviews[s.id] = r; renderTimeline(); renderDetail();
+}
+
+// ------------------------------------------------------------------ review drawer (right side)
+function initReviewModal() {
+  const d = $("rvmodal");
+  d.addEventListener("cancel", (e) => { e.preventDefault(); closeReview(false); });  // Esc: close, stay paused
+  $("rv-later").onclick = () => { S.deferred.add(S.rv.seg.id); closeReview(true); };
+  $("rv-reject").onclick = () => submitReview("reject");
+  $("rv-save").onclick = () => submitReview(S.rv.choice === S.rv.seg.pred.pred_class ? "confirm" : "correct");
+  $("rv-opts").onkeydown = (e) => {
+    if (!["ArrowDown", "ArrowUp"].includes(e.key)) return;
+    e.preventDefault();
+    const items = [...$("rv-opts").children], i = items.indexOf(document.activeElement);
+    const n = items[Math.max(0, Math.min(items.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))];
+    n.focus(); n.click();
+  };
+}
+
+function openReview(s, resume) {
+  const p = s.pred;
+  if (!p) return;
+  S.rv = { seg: s, resume, choice: p.pred_class };
+  if (!S.sel || S.sel.id !== s.id) select(s, false);
+  const secs = (f) => (f / S.data.fps).toFixed(1);
+  $("rv-desc").textContent = `${secs(s.start_frame)}–${secs(s.end_frame + 1)} s · frames ${s.start_frame}–${s.end_frame} · ` +
+    `model predicted ${p.pred_class} (${fmtPct(p.confidence)})`;
+  $("rv-why").replaceChildren(p.abstain ? el("div", { class: "notice" }, el("strong", {}, "⚑ Needs review. "),
+    p.abstain_reason === "confusable_pair_margin" ? `Top two classes are a confusable pair (${p.pred_class} vs ${p.second_class}).`
+      : p.abstain_reason === "no_person_track" ? "No person track." : "Calibrated confidence below the operating threshold.") : "");
+  $("rv-note").value = ""; $("rv-err").hidden = true;
+  renderReviewOpts();
+  $("rvmodal").showModal();
+  $("rv-opts").querySelector('[aria-checked="true"]').focus();
+}
+
+function renderReviewOpts() {
+  const { seg, choice } = S.rv;
+  const ranked = S.classes.map((c, i) => [c, seg.pred.probs[i]]).sort((a, b) => b[1] - a[1]);
+  $("rv-opts").replaceChildren(...ranked.map(([c, v]) => el("button", { type: "button", class: "opt", role: "radio",
+    "aria-checked": String(c === choice), tabindex: c === choice ? "0" : "-1",
+    onclick: () => { S.rv.choice = c; renderReviewOpts(); $("rv-opts").querySelector('[aria-checked="true"]').focus(); } },
+    el("span", { class: "dot", style: `background:${CLASS_COLORS[c]}` }),
+    el("span", {}, c + (c === seg.pred.pred_class ? "  · predicted" : "")),
+    el("span", { class: "small" }, fmtPct(v)),
+    el("span", { class: "meter" }, el("div", { style: `width:${100 * v}%` })))));
+  $("rv-save").textContent = choice === seg.pred.pred_class ? "✓ Confirm" : `Correct to ${choice}`;
+}
+
+async function submitReview(action) {
+  const { seg, choice } = S.rv;
+  const btns = $("rvmodal").querySelectorAll(".foot button");
+  btns.forEach((b) => { b.disabled = true; });
+  try {
+    await postReview(seg, action, action === "correct" ? choice : null, $("rv-note").value);
+    closeReview(true);
+  } catch (e) { $("rv-err").textContent = `Save failed: ${e.message}`; $("rv-err").hidden = false; }
+  finally { btns.forEach((b) => { b.disabled = false; }); }
+}
+
+function closeReview(resume) {
+  const d = $("rvmodal");
+  if (!d.open) return;
+  d.close();
+  if (resume && S.rv && S.rv.resume) { S.prevF = curFrame(); video.play(); }
+  S.rv = null;
+}
+
 function onKey(e) {
+  if ($("rvmodal").open) return;
   if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
   if (e.key === " ") { e.preventDefault(); togglePlay(); }
   else if (e.key === "n") stepSeg(1, false);

@@ -7,12 +7,13 @@
 <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
+<div class="scope" role="note">⚠️ Research prototype on CAP validation data — not for clinical use.</div>
 <header>
   <h1>CAP Activity Review</h1>
   <nav aria-label="Main">
     <a href="./" aria-current="page">Review</a><a href="gallery">Failure gallery</a><a href="report">Calibration report</a>
   </nav>
-  <span class="small" id="runinfo" style="color:#d0d7de"></span>
+  <span class="small" id="runinfo"></span>
 </header>
 <main>
   <section class="panel" aria-labelledby="h-src">
@@ -71,6 +72,7 @@
       <button id="prev" aria-label="Previous segment">⏮ Prev seg</button>
       <button id="next" aria-label="Next segment">Next seg ⏭</button>
       <button id="nextflag" aria-label="Next flagged segment">⚑ Next flagged</button>
+      <label class="small"><input type="checkbox" id="pausereview" checked> pause on segments needing review</label>
       <label class="small"><input type="checkbox" id="loopseg"> loop selected segment</label>
       <label class="small">speed <select id="speed"><option>0.5</option><option selected>1</option><option>2</option></select></label>
       <span id="tc" class="small" aria-live="off"></span>
@@ -85,6 +87,21 @@
     <div id="segdetail" class="small">Select a segment on the timeline.</div>
   </section>
 </main>
+<dialog class="review" id="rvmodal" aria-labelledby="rv-title" aria-describedby="rv-desc">
+  <h2 id="rv-title">Select the correct activity</h2>
+  <p id="rv-desc" class="small"></p>
+  <div id="rv-why"></div>
+  <div class="opts" id="rv-opts" role="radiogroup" aria-label="Activity"></div>
+  <input type="text" id="rv-note" maxlength="500" placeholder="note (optional)" aria-label="Review note">
+  <p id="rv-err" class="notice error" role="alert" hidden></p>
+  <div class="foot">
+    <div>
+      <button type="button" id="rv-later" title="Skip for now and keep playing">Decide later</button>
+      <button type="button" class="secondary" id="rv-reject" title="No such activity / bad segment">Reject</button>
+    </div>
+    <button type="button" class="primary" id="rv-save">Confirm</button>
+  </div>
+</dialog>
 <footer id="attr"></footer>
 <script src="static/common.js"></script>
 <script src="static/app.js"></script>
