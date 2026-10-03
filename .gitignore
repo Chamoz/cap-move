@@ -1,0 +1,52 @@
+# ---- Environments & caches ----
+.venv/
+__pycache__/
+.pytest_cache/
+
+# ---- Logs, pids, env files ----
+*.log
+*.pid
+.env
+.env.*
+
+# ---- Media (contract §2.3: no pixels in git, ever) ----
+*.mp4
+*.mov
+*.webm
+*.avi
+*.m4v
+
+# ---- Data: never committed ----
+data/
+
+# ---- Pickles by default (negated selectively below) ----
+*.pkl
+
+# =====================================================================
+# weights/  — ignore the dir, then re-include ONLY the two YOLO files.
+# AGPL-3.0: license note kept in README.md and docs/weights.md.
+# Large auto-downloading checkpoints (CLIP ViT-B-32.pt, R(2+1)D) stay out.
+# =====================================================================
+weights/*
+!weights/
+!weights/yolo11n.pt
+!weights/yolo11n-pose.pt
+
+# =====================================================================
+# artifacts/ — ignore the whole tree, then re-include ONLY the approved,
+# non-pixel, non-person-derived outputs. Everything else (features/,
+# gallery/thumbs/, uploads/, v2/, logs, pids, reviews.jsonl) stays out.
+# =====================================================================
+artifacts/*
+!artifacts/
+# model deploy head + OOF detail (numbers only)
+!artifacts/model/
+artifacts/model/*
+!artifacts/model/deploy.pkl
+!artifacts/model/oof_detail.json
+# scoring report (numbers only)
+!artifacts/report/
+# gallery index.json only — NOT the thumbs/ (person crops, §2.3)
+!artifacts/gallery/
+artifacts/gallery/*
+!artifacts/gallery/index.json

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cap-review/predictions.schema.json",
+  "title": "CAP review tool predictions (contract v0.1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "run", "classes", "predictions"],
+  "properties": {
+    "contract_version": { "const": "0.1" },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "stage", "created_utc", "manifest_sha256", "out_of_fold", "weights", "abstention"],
+      "properties": {
+        "run_id": { "type": "string", "minLength": 1 },
+        "stage": { "enum": ["A", "B"] },
+        "created_utc": { "type": "string", "format": "date-time" },
+        "manifest_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "out_of_fold": { "const": true },
+        "weights": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "source", "sha256", "role"],
+            "properties": {
+              "name": { "type": "string" },
+              "source": { "type": "string" },
+              "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+              "role": { "enum": ["person_detector", "tracker", "pose", "video_backbone", "classifier_head", "other"] },
+              "license": { "type": "string" }
+            }
+          }
+        },
+        "abstention": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["method"],
+          "properties": {
+            "method": { "type": "string" },
+            "per_fold_threshold": { "type": "array", "items": { "type": "number" }, "minItems": 5, "maxItems": 5 },
+            "per_fold_temperature": { "type": "array", "items": { "type": "number", "exclusiveMinimum": 0 }, "minItems": 5, "maxItems": 5 }
+          }
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "classes": {
+      "const": ["sit_down", "stand_up", "pick_up_object", "put_down_object", "open", "close", "put_on_wearable", "take_off_wearable"]
+    },
+    "predictions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["segment_id", "fold", "pred_class", "probs", "confidence", "abstain"],
+        "properties": {
+          "segment_id": { "type": "string", "pattern": "^.+__.+$" },
+          "fold": { "type": "integer", "minimum": 0, "maximum": 4 },
+          "pred_class": { "enum": ["sit_down", "stand_up", "pick_up_object", "put_down_object", "open", "close", "put_on_wearable", "take_off_wearable"] },
+          "probs": {
+            "type": "array",
+            "description": "Calibrated class probabilities in `classes` order; must sum to 1 within 1e-4 (checked by scripts/validate_predictions.py).",
+            "items": { "type": "number", "minimum": 0, "maximum": 1 },
+            "minItems": 8,
+            "maxItems": 8
+          },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1, "description": "max(probs)" },
+          "abstain": { "type": "boolean", "description": "true = needs human review" },
+          "abstain_reason": { "enum": ["low_confidence", "confusable_pair_margin", "no_person_track", "other"] },
+          "second_class": { "enum": ["sit_down", "stand_up", "pick_up_object", "put_down_object", "open", "close", "put_on_wearable", "take_off_wearable"] }
+        },
+        "if": { "properties": { "abstain": { "const": true } } },
+        "then": { "required": ["abstain_reason"] }
+      }
+    }
+  }
+}

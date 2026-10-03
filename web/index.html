@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CAP Activity Review Tool</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<header>
+  <h1>CAP Activity Review</h1>
+  <nav aria-label="Main">
+    <a href="./" aria-current="page">Review</a><a href="gallery">Failure gallery</a><a href="report">Calibration report</a>
+  </nav>
+  <span class="small" id="runinfo" style="color:#d0d7de"></span>
+</header>
+<main>
+  <section class="panel" aria-labelledby="h-src">
+    <h2 id="h-src">Source</h2>
+    <div role="tablist" aria-label="Mode" class="controls">
+      <button role="tab" id="tab-val" aria-selected="true" aria-pressed="true">Val videos</button>
+      <button role="tab" id="tab-up" aria-selected="false" aria-pressed="false">Upload</button>
+    </div>
+    <div id="pane-val">
+      <label class="small">Filter <input id="vfilter" type="search" placeholder="collection, collector"></label>
+      <ul class="list" id="vlist" aria-label="Validation videos"></ul>
+    </div>
+    <div id="pane-up" hidden>
+      <div class="notice"><strong>Experimental, unscored.</strong> Detect → track → sliding-window classification.
+        The head was trained only on the 8 classes with ground-truth boundaries; expect false segments.
+        Video stays on this host.</div>
+      <form id="upform">
+        <label for="upfile">Video file (≤ <span id="maxs"></span> s, ≤ <span id="maxmb"></span> MB)</label><br>
+        <input type="file" id="upfile" accept="video/*" required><br><br>
+        <button class="primary" type="submit">Upload &amp; analyse</button>
+      </form>
+      <div id="upstatus" aria-live="polite"></div>
+      <progress id="upprog" max="1" value="0" hidden></progress>
+
+      <hr>
+      <h3 class="small">Or capture live from a webcam</h3>
+      <div class="notice small">Recorded entirely in your browser and sent to this host's analysis endpoint only;
+        no frames go to any external service (contract §2.3). Same experimental, unscored pipeline as upload.</div>
+      <div class="stage" id="camstage" style="max-width:360px">
+        <video id="cam" preload="auto" playsinline muted autoplay
+               aria-label="Live webcam preview" style="width:100%;display:block;background:#000"></video>
+      </div>
+      <div class="controls">
+        <label class="small">Camera
+          <select id="camdevice" aria-label="Camera device"><option value="">Default camera</option></select>
+        </label>
+      </div>
+      <div class="controls">
+        <button id="camstart" type="button">Enable camera</button>
+        <button id="camrec" type="button" disabled aria-disabled="true">● Record</button>
+        <button id="camstop" type="button" disabled aria-disabled="true" hidden>■ Stop &amp; analyse</button>
+        <button id="camoff" type="button" disabled aria-disabled="true">Turn off</button>
+      </div>
+      <div id="camstatus" class="small" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-player">
+    <h2 id="h-player">Player <span id="ptitle" class="small"></span></h2>
+    <div class="stage" id="stage">
+      <video id="video" preload="auto" playsinline muted aria-label="Video with person-box overlay"></video>
+      <canvas id="overlay" aria-hidden="true"></canvas>
+    </div>
+    <div class="controls">
+      <button id="play" aria-label="Play or pause (space)">▶ Play</button>
+      <button id="prev" aria-label="Previous segment">⏮ Prev seg</button>
+      <button id="next" aria-label="Next segment">Next seg ⏭</button>
+      <button id="nextflag" aria-label="Next flagged segment">⚑ Next flagged</button>
+      <label class="small"><input type="checkbox" id="loopseg"> loop selected segment</label>
+      <label class="small">speed <select id="speed"><option>0.5</option><option selected>1</option><option>2</option></select></label>
+      <span id="tc" class="small" aria-live="off"></span>
+    </div>
+    <div class="timeline" id="timeline" aria-label="Segment timeline"></div>
+    <p class="small">Lanes: <b>GT</b> = ground-truth segment (val only) · <b>Model</b> = prediction; hatched ⚑ = abstained (needs review).
+      Colours encode class; labels repeat it in text.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-seg" aria-live="polite">
+    <h2 id="h-seg">Segment</h2>
+    <div id="segdetail" class="small">Select a segment on the timeline.</div>
+  </section>
+</main>
+<footer id="attr"></footer>
+<script src="static/common.js"></script>
+<script src="static/app.js"></script>
+</body>
+</html>
