@@ -5,6 +5,76 @@ This is a review tool for activity-recognition output on the confusable CAP acti
 Data: Consented Activities of People (CAP), Visym Labs, CC BY 4.0, https://registry.opendata.aws/visym-cap/.
 This is a local prototype and is not for clinical use.
 
+## Getting started from git
+
+The project lives on a self-hosted Gitea server, reachable over HTTPS through a Cloudflare
+tunnel. The clone contains the code, docs, the frozen contract and manifest, `predictions.json`,
+the two YOLO weights (AGPL-3.0), the deploy head and the scoring report. It does **not** contain
+the CAP media, the feature cache, the gallery thumbnails or the large auto-downloading backbones
+(contract §2.3 — pixels never leave the host).
+
+### 1. Access and clone
+Each teammate has their own Gitea account (`ice`, `pok`, `donut`). Git over HTTPS uses a
+**personal access token** as the password — that token is your identity, so there is no
+interactive login for day-to-day git. Get your token once:
+
+1. Open the Gitea web UI (the tunnel URL you were given) and sign in with your username and
+   first-login password. **Changing that password is recommended but not required** — do it under
+   *Settings → Account* if you want to.
+2. Go to *Settings → Applications → Generate New Token*, scope `repo` (read/write), and copy it.
+3. Clone with your username and the token as the password:
+
+```bash
+git clone https://<tunnel-host>/gr11/cap-position.git
+# username: your Gitea user (e.g. ice);  password: your personal access token
+cd cap-position
+# optional: cache the token for this repo
+git config credential.helper store   # stores in ~/.git-credentials (plaintext) — your call
+```
+
+`main` is protected: no direct pushes and no force-push. Work on a branch and open a pull request.
+
+### 2. Environment (Python 3.9)
+```bash
+# uv is recommended; python -m venv also works
+uv venv --python 3.9 .venv
+. .venv/bin/activate
+pip install -r requirements.lock.txt     # CPU torch wheels; do NOT install GUI opencv-python
+```
+
+### 3. Get the data (not in git)
+The CAP validation set is required — `src/app/server.py` loads it on import, so even the tests
+need it. Download `cap_detection_handheld_val` from https://visym.github.io/cap (verify the MD5)
+into `data/cap_detection_handheld_val/`. Only use it inside an approved environment (contract §2.3).
+
+### 4. Weights
+`weights/yolo11n.pt` and `weights/yolo11n-pose.pt` ship in the clone (AGPL-3.0; see `docs/weights.md`).
+CLIP ViT-B/32 and R(2+1)D-18 are **not** in git — they auto-download on first use; check the
+sha256s in `docs/weights.md`.
+
+### 5. Rebuild the excluded artifacts (in order)
+The feature cache, gallery thumbnails and (optionally) a fresh `predictions.json` are rebuilt from
+the data:
+```bash
+.venv/bin/python scripts/extract_features.py       # ~11 min
+.venv/bin/python scripts/extract_clip.py           # ~3 min
+.venv/bin/python scripts/train_oof.py              # ~4 min -> predictions.json
+.venv/bin/python scripts/validate_predictions.py predictions.json
+.venv/bin/python scripts/score.py predictions.json
+.venv/bin/python scripts/build_gallery.py          # ~1.5 min (thumbnails stay local, git-ignored)
+```
+
+### 6. Run the server
+Without auth (local only):
+```bash
+.venv/bin/python -m src.app.server      # http://127.0.0.1:8000
+```
+With HTTP Basic auth (contract v0.2, for an authenticated tunnel) — credentials come from env vars
+and are never committed or logged:
+```bash
+CAP_AUTH_USER='<user>' CAP_AUTH_PASS='<pass>' .venv/bin/python -m src.app.server
+```
+
 ## Run
 
 ```bash
