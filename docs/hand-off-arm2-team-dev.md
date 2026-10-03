@@ -1,7 +1,21 @@
-# Hand-off — Arm 2: team development from git and metadata analysis — 2026-10-03T12:59Z
+# Hand-off — Arm 2: team development from git and metadata analysis — updated 2026-10-03T13:45Z
 
 Project: CAP Activity Review Tool · Method: AI-DLC · Contract v0.2
-Arm 1 (`docs/hand-off-arm1-git-deploy.md`) puts the code in git. **Arm 2 starts after Arm 1 is done**: the repo is pushed, a clone has been verified and the README setup section exists. If Arm 1 isn't done, stop and say so.
+**Arm 1 is DONE** (`docs/hand-off-arm1-git-deploy.md`, completed 2026-10-03T13:31Z): the code is pushed, a fresh clone was verified (identical, no media), the README has a "Getting started from git" section, and the PR workflow was proven (PR #1 merged). Arm 2 can start.
+
+## Arm 1 result — the live git setup (facts, not plans)
+- **Server**: self-hosted **Gitea 1.27.3** on the project host, bound `127.0.0.1:3000`, exposed via a **cloudflared quick tunnel** (**Option 2**). Hardened: sign-in required, registration off, SSH disabled, repos private, branch protection on `main`.
+- **Repo**: `gr11/cap-position` (private). Initial commit `9a1dcf78`, tag `v1-stageA`; `main` now at `cb7d9f6` after PR #1.
+- **Clone URLs**:
+  - On the host: `http://127.0.0.1:3000/gr11/cap-position.git`
+  - Remote (tunnel, **ephemeral** — changes if cloudflared restarts): `https://platforms-texas-spoke-europe.trycloudflare.com/gr11/cap-position.git`
+- **Accounts**: admin `gr11`; teammates **`ice`, `pok`, `donut`** (Write collaborators). Per the user, the forced first-login password change was **removed** — changing it is optional. First-login passwords were handed over separately (rotate recommended).
+- **Auth model**: **per-user personal access tokens over HTTPS** (SSH is disabled; no SSH keys on `participant`). `main` is protected → branch + PR, no direct push, no force-push.
+
+## Authentication: can Kiro log in, or is the web UI needed?
+- **Creating a token** needs either (a) a one-time **web login** (Settings → Applications → Generate New Token, scope `repo`), or (b) the account **password via the API** (`POST /api/v1/users/{user}/tokens` with Basic auth), or (c) the **admin** generating it on the host (`gitea admin user generate-access-token --username <u> ...`). There is no way to mint a token with neither a password nor admin rights.
+- **Using git afterwards** needs **no web login**: the token is the git password, used non-interactively via a credential helper. Kiro can fully drive clone/branch/commit/push once a token exists.
+- **Conclusion**: web auth is a **one-time** step to obtain each token. Everything after is terminal + token, which Kiro handles — but Kiro does **not** auto-login; a token must be supplied once (then stored via a credential helper). See `docs/handoff-teammate.md` and the login check `docs/handoff-smoke-test-git.md`.
 
 ## Goal
 Teammates clone the repo, set it up, and keep developing the app in their own sessions. The first feature is **metadata analysis**.
@@ -11,7 +25,7 @@ Teammates clone the repo, set it up, and keep developing the app in their own se
    - (a) everyone works on this host, or another single shared environment, over SSH or code-server;
    - (b) amend the contract to v0.3 and list the allowed machines.
 
-   Don't download CAP media to a new machine until this is settled.
+   Don't download CAP media to a new machine until this is settled. (Note: Option 2 gives teammates a *git* URL for the code; it does **not** authorize moving CAP media off-host — that's still question 1.)
 2. **What "metadata analysis" means.** Ask the user which of these, and don't guess:
    - **(A) Dataset metadata → performance breakdowns.** Show how accuracy, calibration and abstention change with recording conditions. This is the safest and most useful option for the demo.
    - **(B) Metadata of uploaded or webcam video.** Read container tags (fps, resolution, codec, duration) and show them in the UI.
@@ -45,12 +59,13 @@ Teammates clone the repo, set it up, and keep developing the app in their own se
    - Keep the existing patterns: vanilla JS, `el()` instead of innerHTML, **relative URLs**, CSP-safe, accessible tables and text labels as well as colour.
 5. Optional: add the metadata buckets to the failure gallery facets.
 
-## Onboarding for each teammate (after Arm 1's README)
-1. The repo is on the **self-hosted Gitea on the project host** (see Arm 1). The admin creates each teammate's account (`--must-change-password`) and adds them as a collaborator.
-   - Clone from `http://127.0.0.1:3000/<owner>/cap-position.git` when working on the host (Option 1), or from the tunnel URL (Option 2; the URL changes when the tunnel restarts).
-   - Clone only into the approved environment (question 1). Authenticate with a personal Gitea access token, never with the account password.
-2. Python 3.9 + `uv venv` + `pip install -r requirements.lock.txt`. Download the data and weights as the README says. Rebuild the artifacts with the scripts (~20 min).
-3. Run `pytest`; all 27 tests should pass. Run the server locally (`127.0.0.1`, auth optional).
+## Onboarding for each teammate (Arm 1 is live)
+Each teammate uses the shared **`docs/handoff-teammate.md`** (substitute your own username `ice`/`pok`/`donut`), and verifies access with **`docs/handoff-smoke-test-git.md`** before real work. In short:
+1. The repo is on the self-hosted **Gitea 1.27.3** on the project host (Arm 1). Accounts `ice`/`pok`/`donut` already exist as Write collaborators.
+   - Clone on the host: `http://127.0.0.1:3000/gr11/cap-position.git`; remote: the tunnel URL (ephemeral).
+   - Authenticate with a **personal access token** (the git password), never with the account password. Get a token by logging into the web UI once (Settings → Applications), or have the admin pre-generate one. SSH is disabled.
+2. Clone only into the approved environment (question 1). Python 3.9 + `uv venv` + `pip install -r requirements.lock.txt`. Download data + weights per the README. Rebuild artifacts (~20 min).
+3. Run `pytest` (27 pass). Run the server locally (`127.0.0.1`, auth optional).
 
 ## Workflow (propose to the user, then record)
 - One feature branch per task (e.g. `feat/metadata-breakdown`). Open PRs to `main`, never push directly, and never force-push.
